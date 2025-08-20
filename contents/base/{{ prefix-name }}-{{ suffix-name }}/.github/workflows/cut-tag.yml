@@ -1,0 +1,82 @@
+on:
+  workflow_dispatch:
+    inputs:
+      version-level:
+        description: 'Version bump level'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions: write-all
+
+name: Tag & Release
+run-name: Cut ${{'{'}}{ inputs.version-level }} tag by @${{'{'}}{ github.triggering_actor }}
+
+jobs:
+  tag_and_release:
+    name: Tag & Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python and uv
+        uses: p6m-actions/python-uv-setup@v1
+        with:
+          python-version: "3.11"
+
+      - name: Login to Python Repository
+        uses: p6m-actions/python-uv-repository-login@v1
+        with:
+          credentials: |
+            artifactory=${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}:${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+
+      - name: Cut Tag
+        id: cut-tag
+        uses: p6m-actions/python-uv-cut-tag@v1
+        with:
+          version-level: ${{'{'}}{ inputs.version-level }}
+
+      - name: Build Python Application
+        uses: p6m-actions/python-uv-build@v1
+        with:
+          modules: "{{ prefix-name }}-{{ suffix-name }}-api {{ prefix-name }}-{{ suffix-name }}-core {{ prefix-name }}-{{ suffix-name }}-persistence {{ prefix-name }}-{{ suffix-name }}-server {{ prefix-name }}-{{ suffix-name }}-client"
+          run-tests: true
+          version: ${{'{'}}{ steps.cut-tag.outputs.version }}
+
+      - name: Login to Docker Repository
+        uses: p6m-actions/docker-repository-login@v1
+        with:
+          username: ${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}
+          password: ${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+
+      - name: Build and Publish Docker Image
+        id: docker-publish
+        uses: p6m-actions/python-uv-docker-publish@v1
+        with:
+          image-name: {{ prefix-name }}-{{ suffix-name }}-server
+          image-tag: ${{'{'}}{ steps.cut-tag.outputs.version }}
+          registry: {{ org-name }}-{{ solution-name }}-docker-local/applications
+          push: true
+          version: ${{'{'}}{ steps.cut-tag.outputs.version }}
+
+      - name: Publish to Python Repository
+        uses: p6m-actions/python-uv-repository-publish@v1
+        with:
+          modules: "{{ prefix-name }}-{{ suffix-name }}-api {{ prefix-name }}-{{ suffix-name }}-core {{ prefix-name }}-{{ suffix-name }}-persistence {{ prefix-name }}-{{ suffix-name }}-server {{ prefix-name }}-{{ suffix-name }}-client"
+          repository: artifactory
+
+      - name: Update Application Manifest
+        uses: p6m-actions/platform-application-manifest-dispatch@v1
+        with:
+          repository: ${{'{'}}{ github.repository }}
+          image-name: {{ prefix-name }}-{{ suffix-name }}-server
+          environment: "prod"
+          digest: ${{'{'}}{ steps.docker-publish.outputs.image-digest }}
+          update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
+          platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
+          directory-name: {{ prefix-name }}-{{ suffix-name }}

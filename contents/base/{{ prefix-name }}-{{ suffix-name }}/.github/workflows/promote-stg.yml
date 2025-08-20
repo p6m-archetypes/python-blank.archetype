@@ -1,0 +1,42 @@
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to promote'
+        required: true
+
+permissions: write-all
+
+name: Promote Tag to Stage
+run-name: Deploy ${{'{'}}{ inputs.tag }} to Stage by @${{'{'}}{ github.triggering_actor }}
+
+jobs:
+  promote:
+    name: Promote Tag to Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Repository
+        uses: p6m-actions/docker-repository-login@v1
+        with:
+          username: ${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}
+          password: ${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+
+      - name: Get Image Digest
+        id: get-digest
+        run: |
+          DIGEST=$(docker manifest inspect {{ org-name }}-{{ solution-name }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${{'{'}}{ inputs.tag }} | jq -r '.config.digest')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Update Application Manifest
+        uses: p6m-actions/platform-application-manifest-dispatch@v1
+        with:
+          repository: ${{'{'}}{ github.repository }}
+          image-name: {{ prefix-name }}-{{ suffix-name }}-server
+          environment: "stg"
+          digest: ${{'{'}}{ steps.get-digest.outputs.digest }}
+          update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
+          platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
+          directory-name: {{ prefix-name }}-{{ suffix-name }}

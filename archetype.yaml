@@ -1,0 +1,9 @@
+---
+description: "Python Blank Service with FastAPI, UV, and Modern Tooling"
+authors: ["Generated via AI Assistant"]
+languages: ["Python"]
+frameworks: ["FastAPI", "SQLAlchemy", "Pydantic", "Pytest"]
+tags: ["API", "Microservice", "Python", "FastAPI", "Minimal"]
+
+requires:
+  archetect: "2.0.5"
