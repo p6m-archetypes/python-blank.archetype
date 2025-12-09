@@ -75,7 +75,7 @@ jobs:
         with:
           repository: ${{'{'}}{ github.repository }}
           image-name: {{ prefix-name }}-{{ suffix-name }}
-          environment: "prod"
+          environment: "prd"
           digest: ${{'{'}}{ steps.docker-publish.outputs.image-digest }}
           update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
           platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
