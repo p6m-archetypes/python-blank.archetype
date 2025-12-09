@@ -34,7 +34,7 @@ jobs:
         uses: p6m-actions/platform-application-manifest-dispatch@v1
         with:
           repository: ${{'{'}}{ github.repository }}
-          image-name: {{ prefix-name }}-{{ suffix-name }}-server
+          image-name: {{ prefix-name }}-{{ suffix-name }}
           environment: "stg"
           digest: ${{'{'}}{ steps.get-digest.outputs.digest }}
           update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
