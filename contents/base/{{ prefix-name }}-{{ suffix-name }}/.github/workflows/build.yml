@@ -2,7 +2,9 @@ on:
   - push
   - workflow_dispatch
 
-permissions: write-all
+permissions:
+  contents: write   # required by python-uv-cut-tag to push version tags
+  packages: write   # required to push Docker image
 
 name: Build
 
@@ -60,7 +62,6 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           DOCKER_CLI_EXPERIMENTAL: enabled
-
 
       - name: Update Application Manifest
         uses: p6m-actions/platform-application-manifest-dispatch@v1

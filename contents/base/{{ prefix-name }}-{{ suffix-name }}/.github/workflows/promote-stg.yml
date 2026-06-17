@@ -5,7 +5,8 @@ on:
         description: 'Tag to promote'
         required: true
 
-permissions: write-all
+permissions:
+  contents: read
 
 name: Promote Tag to Stage
 run-name: Deploy ${{'{'}}{ inputs.tag }} to Stage by @${{'{'}}{ github.triggering_actor }}
@@ -26,9 +27,14 @@ jobs:
 
       - name: Get Image Digest
         id: get-digest
+        env:
+          TAG: ${{'{'}}{ inputs.tag }}
         run: |
-          DIGEST=$(docker manifest inspect {{ org-name }}-{{ solution-name }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${{'{'}}{ inputs.tag }} | jq -r '.config.digest')
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          if ! [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Invalid tag: $TAG"; exit 1
+          fi
+          DIGEST=$(docker manifest inspect "{{ org-name }}-{{ solution-name }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${TAG}" | jq -r '.config.digest')
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Update Application Manifest
         uses: p6m-actions/platform-application-manifest-dispatch@v1
