@@ -1,26 +1,29 @@
+name: Build
+
 on:
   - push
   - workflow_dispatch
 
 permissions:
   contents: write   # required by python-uv-cut-tag to push version tags
-  packages: write   # required to push Docker image
   id-token: write   # required by token-exchange inside python-uv-cut-tag
 
-name: Build
-
 env:
-  DOCKER_REGISTRY: ${{'{'}}{ vars.ARTIFACTORY_HOSTNAME }}
-  DOCKER_REPOSITORY: {{ org-name }}-{{ solution-name }}-docker-local/applications
   IMAGE_NAME: {{ prefix-name }}-{{ suffix-name }}
 
 jobs:
   build_and_deploy:
     name: Build & Deploy
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{'{'}}{steps.cut-patch.outputs.version }}
+      digest: ${{'{'}}{steps.docker-publish.outputs.image-digest }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python and uv
         uses: p6m-actions/python-uv-setup@v1
@@ -34,6 +37,7 @@ jobs:
             artifactory=${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}:${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
 
       - name: Cut Patch Version
+        if: github.ref_name == 'main'
         id: cut-patch
         uses: p6m-actions/python-uv-cut-tag@v1
         with:
@@ -49,26 +53,35 @@ jobs:
           username: ${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}
           password: ${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
 
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: p6m-actions/docker-buildx-setup@v1
+
       - name: Build and Publish Docker Image
         id: docker-publish
-        uses: p6m-actions/python-uv-docker-publish@v1
+        uses: p6m-actions/docker-buildx-build-publish@v1
         with:
           image-name: {{ prefix-name }}-{{ suffix-name }}-server
-          image-tag: ${{'{'}}{ github.sha }}
-          registry: {{ org-name }}-{{ solution-name }}-docker-local/applications
-          push: true
-        env:
-          DOCKER_BUILDKIT: 1
-          DOCKER_CLI_EXPERIMENTAL: enabled
+          image-tag: ${{'{'}}{ steps.cut-patch.outputs.version || format('dev-{0}', github.sha) }}
+          registry: ${{'{'}}{ vars.ARTIFACTORY_HOSTNAME }}/${{'{'}}{ vars.ARTIFACTORY_PROJECT }}-docker-local/applications
+          platforms: linux/amd64
+          push: ${{'{'}}{github.ref_name == 'main' }}
+          skip-setup: true
+          builder-name: ${{'{'}}{ steps.buildx.outputs.name }}
 
+  update-application-manifest:
+    name: Update Application Manifest
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    needs: build_and_deploy
+    steps:
       - name: Update Application Manifest
         uses: p6m-actions/platform-application-manifest-dispatch@v1
         with:
           repository: ${{'{'}}{ github.repository }}
-          image-name: ${{'{'}}{ env.IMAGE_NAME }}
+          image-name: ${{'{'}}{env.IMAGE_NAME }}
           environment: "dev"
-          digest: ${{'{'}}{ steps.docker-publish.outputs.image-digest }}
+          digest: ${{'{'}}{ needs.build_and_deploy.outputs.digest }}
           update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
           platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
           directory-name: {{ prefix-name }}-{{ suffix-name }}
-        if: always()
