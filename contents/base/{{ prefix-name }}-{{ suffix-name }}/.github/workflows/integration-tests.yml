@@ -33,13 +33,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Set up Python ${{'{'}}{ matrix.python-version }}
-        run: uv python install ${{'{'}}{ matrix.python-version }}
+      - name: Setup Python and uv
+        uses: p6m-actions/python-uv-setup@v1
+        with:
+          python-version: ${{'{'}}{ matrix.python-version }}
 
       - name: Build package
         run: |
