@@ -5,6 +5,7 @@ on:
 permissions:
   contents: write   # required by python-uv-cut-tag to push version tags
   packages: write   # required to push Docker image
+  id-token: write   # required by token-exchange inside python-uv-cut-tag
 
 name: Build
 
