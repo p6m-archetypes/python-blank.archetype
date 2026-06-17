@@ -64,7 +64,7 @@ jobs:
           image-name: {{ prefix-name }}-{{ suffix-name }}-server
           image-tag: ${{'{'}}{ steps.cut-patch.outputs.version || format('dev-{0}', github.sha) }}
           registry: ${{'{'}}{ vars.ARTIFACTORY_HOSTNAME }}/${{'{'}}{ vars.ARTIFACTORY_PROJECT }}-docker-local/applications
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: ${{'{'}}{github.ref_name == 'main' }}
           skip-setup: true
           builder-name: ${{'{'}}{ steps.buildx.outputs.name }}
