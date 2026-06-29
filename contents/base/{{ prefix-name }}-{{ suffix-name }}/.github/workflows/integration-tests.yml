@@ -76,7 +76,16 @@ jobs:
           curl -sf http://localhost:8080/
           curl -sf http://localhost:8000/health/live
           curl -sf http://localhost:8000/
-          echo "✅ All endpoints healthy"
+          {
+            echo "## Health Endpoint Results"
+            echo "| Endpoint | Status |"
+            echo "| -------- | ------ |"
+            echo "| \`localhost:8080/health/live\` | ✅ |"
+            echo "| \`localhost:8080/health/ready\` | ✅ |"
+            echo "| \`localhost:8080/\` | ✅ |"
+            echo "| \`localhost:8000/health/live\` | ✅ |"
+            echo "| \`localhost:8000/\` | ✅ |"
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Collect logs on failure
         if: failure()
