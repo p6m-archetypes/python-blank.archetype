@@ -4,34 +4,35 @@
 
 ## Usage
 
-To get started, [install archetect](https://github.com/p6m-archetypes/development-handbook)
-and render this template to your current working directory:
+[Install archetect](https://github.com/p6m-archetypes/development-handbook), then render this template into your current working directory:
 
 ```bash
 archetect render git@github.com:p6m-archetypes/python-blank.archetype.git
 ```
 
-This creates a completely empty Python project with only the necessary infrastructure files.
-
 ## Prompts
 
-When rendering the archetype, you'll be prompted for the following values:
+You'll be asked for five values. Use the examples below for a service named `python-fast-api` under the `p6m-archetypes` GitHub org:
 
-| Property       | Description                                                                                                         | Example          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `project`      | General name that represents the service domain                                                                     | Shopping Cart    |
-| `suffix`       | Used in conjunction with `project` to set package names                                                            | Service          |
-| `group-prefix` | Used in conjunction with `project` to set package names                                                            | {{ group-id }}   |
-| `team-name`    | Identifies the team that owns the generated project                                                                 | Growth           |
+| Prompt | Description | Example |
+|--------|-------------|---------|
+| **Project Author** | Your name and email | `Jane Smith <jane@example.com>` |
+| **Org Name** | GitHub org prefix (before the `-`) | `p6m` |
+| **Solution Name** | GitHub org suffix (after the `-`) | `archetypes` |
+| **Project Prefix** | Business domain or technology prefix | `python-fast` |
+| **Project Suffix** | Project type | `api` |
+
+With the example values above, the rendered project is named `python-fast-api` and the target GitHub org is `p6m-archetypes`.
 
 ## What's Inside
 
-This archetype provides only the essential infrastructure files:
+The archetype generates only infrastructure scaffolding — no application code. You write the Python source yourself.
 
-- **GitHub Actions workflows** for CI/CD (build, promote to staging/production)
-- **Kubernetes platform configuration** for deployment
-- **Basic Dockerfile** for containerization
-- **Project structure** with no application code
-- **No dependencies, frameworks, or opinions** - completely blank slate
-
-You add your own Python application code, dependencies, and build configuration.
+| File / Directory | Purpose |
+|-----------------|---------|
+| `.github/workflows/build.yml` | Bump patch version, run tests, build multi-arch Docker image, dispatch manifest update to dev |
+| `.github/workflows/integration-tests.yml` | `uv sync && uv build`, spin up Docker Compose stack, verify health endpoints |
+| `.github/workflows/cut-tag.yml` | Manual minor/major/patch release cut and GitHub Release creation |
+| `.github/workflows/promote.yml` | Promote a tagged release to `stg` or `prd` |
+| `Dockerfile` | Placeholder — replace with your app image |
+| `CLAUDE.md` | Onboarding guide for Claude Code: platform constraints, files to create, and first-push checklist |
