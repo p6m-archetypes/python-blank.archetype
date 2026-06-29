@@ -24,10 +24,6 @@ jobs:
   build:
     name: "Build Package"
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
-      fail-fast: false
 
     steps:
       - name: Checkout
@@ -36,13 +32,13 @@ jobs:
       - name: Setup Python and uv
         uses: p6m-actions/python-uv-setup@v1
         with:
-          python-version: ${{'{'}}{ matrix.python-version }}
+          python-version: ${{'{'}}{ env.PYTHON_VERSION }}
 
       - name: Build package
         run: |
-          uv sync --python ${{'{'}}{ matrix.python-version }}
+          uv sync
           uv build
-          echo "✅ Package built successfully"
+          echo "✅ Package built successfully" | tee -a $GITHUB_STEP_SUMMARY
 
   integration-test-docker:
     name: "Docker Stack Integration"
@@ -99,9 +95,14 @@ jobs:
     steps:
       - name: Check results
         run: |
-          echo "=== Integration Test Results ==="
-          echo "Build: ${{'{'}}{ needs.build.result }}"
-          echo "Docker stack: ${{'{'}}{ needs.integration-test-docker.result }}"
+          {
+            echo "## Integration Test Results"
+            echo ""
+            echo "| Job | Result |"
+            echo "| --- | ------ |"
+            echo "| Build | ${{'{'}}{ needs.build.result }} |"
+            echo "| Docker Stack | ${{'{'}}{ needs.integration-test-docker.result }} |"
+          } >> $GITHUB_STEP_SUMMARY
 
           if [[ "${{'{'}}{ needs.build.result }}" != "success" ]]; then
             echo "❌ Package build failed"
@@ -113,4 +114,4 @@ jobs:
             exit 1
           fi
 
-          echo "✅ All integration tests passed!"
+          echo "✅ All integration tests passed!" | tee -a $GITHUB_STEP_SUMMARY
