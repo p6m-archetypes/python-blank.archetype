@@ -1,0 +1,7 @@
+apiVersion: meta.p6m.dev/v1alpha1
+kind: PlatformTask
+metadata:
+  name: {{ prefix-name }}-{{ suffix-name }}
+spec:
+  # Override the schedule per environment if dev should run more often.
+  schedule: "{{ schedule }}"

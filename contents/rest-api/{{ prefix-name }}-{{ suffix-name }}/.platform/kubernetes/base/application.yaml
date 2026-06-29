@@ -1,0 +1,73 @@
+apiVersion: meta.p6m.dev/v1alpha1
+kind: PlatformApplication
+metadata:
+  name: {{ prefix-name }}-{{ suffix-name }}
+  labels:
+    p6m.dev/app: {{ prefix-name }}-{{ suffix-name }}
+spec:
+  config:
+    SERVER_PORT: "{{ port }}"
+    LOGGING_STRUCTURED: "true"
+{%- if database == "CockroachDB (platform-managed)" %}
+    # CockroachDB — credentials injected by the platform operator from resources.crdb
+    DATABASE_URL: "postgresql+asyncpg://$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_username):$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_password)@$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_endpoint):$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_port)/{{ prefix_name }}_{{ suffix_name }}_db?ssl=require"
+{%- elif database == "External (bring your own URL)" %}
+    # External database — move this to a secret before production.
+    DATABASE_URL: "{{ database_url }}"
+{%- endif %}
+{%- if object_storage == "Yes" %}
+    AZURE_STORAGE_CONTAINER_NAME: "{{ prefix-name }}-{{ suffix-name }}-data"
+{%- endif %}
+{%- if database == "CockroachDB (platform-managed)" or object_storage == "Yes" %}
+  resources:
+{%- if database == "CockroachDB (platform-managed)" %}
+    crdb:
+      - name: {{ prefix-name }}-{{ suffix-name }}
+{%- endif %}
+{%- if object_storage == "Yes" %}
+    blobstorage:
+      - name: {{ prefix-name }}-{{ suffix-name }}-data
+        accesses: [read, write]
+{%- endif %}
+{%- endif %}
+  deployment:
+    image: {{ prefix-name }}-{{ suffix-name }}-server:latest
+    ports:
+      - protocol: http
+        port: {{ port }}
+    readinessProbe:
+      port: {{ port }}
+      path: /health
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+  networking:
+{%- if ingress != "Internal (cluster only)" %}
+    ingress:
+      enabled: true
+{%- if ingress == "Public + OIDC" %}
+      oidc: true
+{%- endif %}
+{%- endif %}
+    inbound:
+      services:
+        - name: {{ prefix-name }}-{{ suffix-name }}
+          namespace: {{ prefix-name }}-{{ suffix-name }}
+          port: {{ port }}
+{%- if metrics == "Yes" %}
+        - name: alloy
+          namespace: alloy
+          port: {{ port }}
+{%- endif %}
+{%- if egress == "Restricted (allow-list)" %}
+    outbound:
+      external:
+{%- for host in egress_hosts %}
+        - host: {{ host }}
+          ports: [443]
+{%- endfor %}
+{%- endif %}

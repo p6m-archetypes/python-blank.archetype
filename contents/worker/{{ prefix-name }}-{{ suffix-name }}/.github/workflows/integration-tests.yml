@@ -1,0 +1,72 @@
+name: {{ prefix-name }}-{{ suffix-name }} Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - '.github/workflows/integration-tests.yml'
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Mondays at 6 AM UTC
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build:
+    name: "Build Package"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python and uv
+        uses: p6m-actions/python-uv-setup@v1
+        with:
+          python-version: ${{'{'}}{ env.PYTHON_VERSION }}
+
+      - name: Build package
+        run: |
+          uv sync
+          uv build
+          echo "Package built successfully" | tee -a $GITHUB_STEP_SUMMARY
+
+  worker-smoke:
+    name: "Worker Startup Smoke Test"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # A worker has no HTTP endpoint to curl. Instead we start the container and
+      # assert it stays up — i.e. the entrypoint imports and the run loop begins
+      # without crashing. A worker that exits immediately is also a failure here.
+      - name: Start worker container
+        run: docker compose up --build -d
+
+      - name: Verify worker stays running
+        run: |
+          sleep 15
+          if [ -z "$(docker compose ps -q --status running {{ prefix-name }}-{{ suffix-name }})" ]; then
+            echo "Worker is not running after 15s"
+            docker compose logs {{ prefix-name }}-{{ suffix-name }}
+            exit 1
+          fi
+          echo "Worker started and is still running" | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose logs {{ prefix-name }}-{{ suffix-name }}
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

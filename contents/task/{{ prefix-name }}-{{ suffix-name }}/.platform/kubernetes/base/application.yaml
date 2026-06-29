@@ -1,0 +1,18 @@
+# NOTE: verify apiVersion against the live PlatformTask CRD — the CRD reference
+# doc shows `p6m.dev/v1alpha1` while the operator's other CRDs use `meta.p6m.dev/v1alpha1`.
+apiVersion: meta.p6m.dev/v1alpha1
+kind: PlatformTask
+metadata:
+  name: {{ prefix-name }}-{{ suffix-name }}
+  labels:
+    p6m.dev/app: {{ prefix-name }}-{{ suffix-name }}
+spec:
+  slug: {{ prefix-name }}-{{ suffix-name }}
+  name: "{{ prefix-name }}-{{ suffix-name }}"
+  solution: {{ solution-name }}
+  type: cron
+  trigger: schedule
+  runtime: kubernetes-cron-job
+  schedule: "{{ schedule }}"
+  language: python
+  image: {{ prefix-name }}-{{ suffix-name }}-server:latest

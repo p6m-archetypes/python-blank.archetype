@@ -1,0 +1,63 @@
+name: {{ prefix-name }}-{{ suffix-name }} Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - '.github/workflows/integration-tests.yml'
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Mondays at 6 AM UTC
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build:
+    name: "Build Package"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python and uv
+        uses: p6m-actions/python-uv-setup@v1
+        with:
+          python-version: ${{'{'}}{ env.PYTHON_VERSION }}
+
+      - name: Build package
+        run: |
+          uv sync
+          uv build
+          echo "Package built successfully" | tee -a $GITHUB_STEP_SUMMARY
+
+  task-run:
+    name: "Task Run-to-Completion Smoke Test"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # A scheduled task has no endpoint and no long-running process. We run it
+      # once and assert it exits 0 — i.e. the job completes successfully.
+      - name: Run task once
+        run: |
+          if docker compose run --build --rm {{ prefix-name }}-{{ suffix-name }}; then
+            echo "Task completed successfully (exit 0)" | tee -a $GITHUB_STEP_SUMMARY
+          else
+            echo "Task exited non-zero"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

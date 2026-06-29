@@ -1,0 +1,5 @@
+apiVersion: meta.p6m.dev/v1alpha1
+kind: PlatformTask
+metadata:
+  name: {{ prefix-name }}-{{ suffix-name }}
+spec: {}
