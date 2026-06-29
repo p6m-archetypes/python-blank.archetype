@@ -1,8 +1,13 @@
+name: Cut Tag & Release
+permissions:
+  contents: write # Required for pushing tags and creating releases
+  id-token: write # Required by token-exchange inside python-uv-cut-tag
+
 on:
   workflow_dispatch:
     inputs:
       version-level:
-        description: 'Version bump level'
+        description: "Version bump level"
         required: true
         type: choice
         options:
@@ -11,18 +16,20 @@ on:
           - major
         default: patch
 
-permissions: write-all
-
-name: Tag & Release
-run-name: Cut ${{'{'}}{ inputs.version-level }} tag by @${{'{'}}{ github.triggering_actor }}
+run-name: Cut ${{'{'}}{inputs.version-level }} tag by @${{'{'}}{github.triggering_actor }}
 
 jobs:
-  tag_and_release:
-    name: Tag & Release
+  release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{'{'}}{steps.cut-tag.outputs.version }}
+      tag: ${{'{'}}{steps.cut-tag.outputs.tag }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python and uv
         uses: p6m-actions/python-uv-setup@v1
@@ -33,50 +40,53 @@ jobs:
         uses: p6m-actions/python-uv-repository-login@v1
         with:
           credentials: |
-            artifactory=${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}:${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+            artifactory=${{'{'}}{secrets.ARTIFACTORY_USERNAME }}:${{'{'}}{secrets.ARTIFACTORY_IDENTITY_TOKEN }}
 
       - name: Cut Tag
         id: cut-tag
         uses: p6m-actions/python-uv-cut-tag@v1
         with:
-          version-level: ${{'{'}}{ inputs.version-level }}
+          version-level: ${{'{'}}{github.event.inputs.version-level }}
 
-      - name: Build Python Application
-        uses: p6m-actions/python-uv-build@v1
-        with:
-          modules: "{{ prefix-name }}-{{ suffix-name }}-api {{ prefix-name }}-{{ suffix-name }}-core {{ prefix-name }}-{{ suffix-name }}-persistence {{ prefix-name }}-{{ suffix-name }}-server {{ prefix-name }}-{{ suffix-name }}-client"
-          run-tests: true
-          version: ${{'{'}}{ steps.cut-tag.outputs.version }}
+      - name: Output Version Info
+        run: echo "Released version ${{'{'}}{steps.cut-tag.outputs.version }} with tag ${{'{'}}{steps.cut-tag.outputs.tag }}" | tee -a $GITHUB_STEP_SUMMARY
 
       - name: Login to Docker Repository
         uses: p6m-actions/docker-repository-login@v1
         with:
-          username: ${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}
-          password: ${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+          registry: ${{'{'}}{vars.ARTIFACTORY_HOSTNAME }}
+          username: ${{'{'}}{secrets.ARTIFACTORY_USERNAME }}
+          password: ${{'{'}}{secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and Publish Docker Image
         id: docker-publish
-        uses: p6m-actions/python-uv-docker-publish@v1
+        uses: docker/build-push-action@v6
         with:
-          image-name: {{ prefix-name }}-{{ suffix-name }}-server
-          image-tag: ${{'{'}}{ steps.cut-tag.outputs.version }}
-          registry: {{ org-name }}-{{ solution-name }}-docker-local/applications
-          push: true
-          version: ${{'{'}}{ steps.cut-tag.outputs.version }}
+          tags: ${{'{'}}{vars.ARTIFACTORY_HOSTNAME }}/${{'{'}}{vars.ARTIFACTORY_PROJECT }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${{'{'}}{steps.cut-tag.outputs.version }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{'{'}}{github.ref_name == 'main' }}
+          secrets: |
+            artifactory-username=${{'{'}}{secrets.ARTIFACTORY_USERNAME }}
+            artifactory-identity-token=${{'{'}}{secrets.ARTIFACTORY_IDENTITY_TOKEN }}
 
-      - name: Publish to Python Repository
-        uses: p6m-actions/python-uv-repository-publish@v1
-        with:
-          modules: "{{ prefix-name }}-{{ suffix-name }}-api {{ prefix-name }}-{{ suffix-name }}-core {{ prefix-name }}-{{ suffix-name }}-persistence {{ prefix-name }}-{{ suffix-name }}-server {{ prefix-name }}-{{ suffix-name }}-client"
-          repository: artifactory
+      - name: Make Artifacts
+        if: github.ref_name == 'main'
+        run: |
+          echo '${{'{'}}{steps.docker-publish.outputs.digest }}' | tee digest.txt
 
-      - name: Update Application Manifest
-        uses: p6m-actions/platform-application-manifest-dispatch@v1
+      - name: Create Github Release
+        uses: ncipollo/release-action@v1
+        if: github.ref_name == 'main'
         with:
-          repository: ${{'{'}}{ github.repository }}
-          image-name: {{ prefix-name }}-{{ suffix-name }}
-          environment: "prd"
-          digest: ${{'{'}}{ steps.docker-publish.outputs.image-digest }}
-          update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
-          platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
-          directory-name: {{ prefix-name }}-{{ suffix-name }}
+          name: Version ${{'{'}}{steps.cut-tag.outputs.version }}
+          tag: ${{'{'}}{steps.cut-tag.outputs.tag }}
+          makeLatest: true
+          artifacts: "digest.txt"
+          removeArtifacts: true
+          generateReleaseNotes: true
+          body: |
+            Application version: `${{'{'}}{steps.cut-tag.outputs.version }}`
+            Docker image digest: `${{'{'}}{steps.docker-publish.outputs.digest }}`
