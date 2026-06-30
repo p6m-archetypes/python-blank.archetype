@@ -1,4 +1,4 @@
-# Scheduled Task profile — runs to completion (no long-running server, no port).
+# Scheduled Task profile - runs to completion (no long-running server, no port).
 FROM python:3.11-slim
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
