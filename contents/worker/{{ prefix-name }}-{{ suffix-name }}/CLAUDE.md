@@ -119,6 +119,57 @@ def test_main_module_imports():
     assert hasattr(worker, "main")
 ```
 
+## Adding business logic
+
+The scaffold gives you a loop that starts, idles, and shuts down on SIGTERM. Your work goes inside that loop — but keep the loop thin and put the real logic in its own module so you can test it without running forever.
+
+### Where code goes
+
+```
+src/{{ prefix_name }}_{{ suffix_name }}/
+  __main__.py      # signal handling + the run loop (driver only — keep thin)
+  processing.py    # the actual work as functions you can unit-test
+```
+
+### The work loop
+
+`__main__.py` is the driver; `processing.py` holds the logic the loop calls. Each iteration should do one unit of work, then re-check `_stop`:
+
+- **Queue consumer:** poll → process one message in a `try/except` → ack on success → loop. One bad message must not kill the loop — log it (or dead-letter it) and continue.
+- **Polling/batch loop:** fetch a batch → process it → sleep briefly → loop.
+
+Respect `_stop`: long operations should check it and return promptly, so a SIGTERM drains in-flight work within the grace period instead of being killed. Make processing idempotent if your source delivers at-least-once.
+{%- if database == "CockroachDB (platform-managed)" or database == "External (bring your own URL)" %}
+
+### Database (wired in)
+
+The manifest injects `DATABASE_URL` into the environment — read it with `os.environ["DATABASE_URL"]`, never hardcode it. Open one async engine/pool at startup, reuse it across loop iterations, and dispose it on shutdown (in the SIGTERM path). Add `sqlalchemy[asyncio]>=2.0` and `asyncpg>=0.29` to `dependencies`.
+{%- endif %}
+{%- if object_storage == "Yes" %}
+
+### Object storage (wired in)
+
+`AZURE_STORAGE_CONTAINER_NAME` is in the environment and the app identity has read/write. Use `azure-storage-blob` + `azure-identity` with `DefaultAzureCredential()` — no keys or connection strings in code or config.
+{%- endif %}
+{%- if egress == "Restricted (allow-list)" %}
+
+### Outbound calls are restricted
+
+Egress is allow-listed — the worker can only reach the hosts in `networking.outbound.external` in `.platform/kubernetes/base/application.yaml`. Add any new host there before calling it.
+{%- endif %}
+
+### Guardrails
+
+- No HTTP server, no port, no `/health` — that's the REST API profile. If you need to serve traffic, regenerate as REST API rather than bolting a server onto the loop.
+- Don't `time.sleep()` so long that SIGTERM can't interrupt it — sleep in short increments or use an interruptible wait, and check `_stop` between chunks.
+
+### Example prompts
+
+- "Add a consumer that reads messages off the orders queue and processes each one, acking on success." → Claude puts the handler in `processing.py`, wires it into the loop with per-message error handling, and tests the handler directly.
+{%- if database == "CockroachDB (platform-managed)" or database == "External (bring your own URL)" %}
+- "Each cycle, pull unprocessed rows from the database in batches of 100 and mark them done." → Claude reads `DATABASE_URL`, opens an async engine at startup, and keeps the batch logic idempotent.
+{%- endif %}
+
 ## CI pipeline
 
 Once the files above exist, the four workflows run cleanly:

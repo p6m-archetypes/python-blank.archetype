@@ -100,6 +100,39 @@ def test_run_completes():
     task.run()  # should not raise
 ```
 
+## Adding business logic
+
+The scaffold gives you a `run()` that logs and exits 0. Your work goes inside `run()` — but keep `__main__.py` thin and put the steps in their own module so you can test them.
+
+### Where code goes
+
+```
+src/{{ prefix_name }}_{{ suffix_name }}/
+  __main__.py      # entry point: calls run(), maps exceptions to exit code (keep thin)
+  steps.py         # the work as functions run() orchestrates
+```
+
+### Writing the task
+
+- `run()` orchestrates; each unit of work is a function in `steps.py`.
+- **Exit code is the result.** Exit 0 = success; any non-zero exit marks the CronJob run failed (and alerts fire). Let real errors propagate to the `__main__` handler that exits 1 — don't catch-and-swallow, then exit 0.
+- **Idempotency is mandatory.** A schedule can fire late, overlap a previous run, or be retried. Guard with a watermark/checkpoint, upsert instead of blind insert, or an "already processed" marker — a re-run must be safe.
+- **Bound the work.** A task runs to completion and exits; it must not loop forever (that's the Background Worker profile).
+- Log start, record counts, and finish — `LOGGING_STRUCTURED=true` is already set, so these become structured logs you can query.
+
+### Changing the schedule
+
+The cron lives in `spec.schedule` (UTC) in `.platform/kubernetes/base/application.yaml`. Change cadence there, not in code; use `.platform/kubernetes/dev/application_patch.yaml` to run more often in dev.
+
+### Need a datastore?
+
+The Scheduled Task profile isn't prompted for a database or object storage. If your task needs one, add the resource to `.platform/kubernetes/base/application.yaml` (mirror the `resources.crdb` / `blobstorage` block the REST API profile uses) and read its connection info from the environment — never hardcode credentials.
+
+### Example prompts
+
+- "Add an ETL step that pulls yesterday's orders and writes a daily summary row." → Claude adds the step to `steps.py`, calls it from `run()`, and lets failures exit non-zero.
+- "Make the run idempotent by checkpointing the last processed date." → Claude adds a watermark check so a re-run skips already-processed data.
+
 ## CI pipeline
 
 | Workflow | Trigger | What it does |

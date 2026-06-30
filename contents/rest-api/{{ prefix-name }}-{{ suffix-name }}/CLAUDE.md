@@ -1,6 +1,6 @@
 # {{ prefix-name }}-{{ suffix-name }}
 
-This project was generated from [python-blank.archetype](https://github.com/p6m-archetypes/python-blank.archetype). It ships with CI/CD workflows, Kubernetes manifests, and a placeholder Dockerfile — but **no Python application code**. This file tells you (and Claude Code) exactly what to build.
+This project was generated from [python-blank.archetype](https://github.com/p6m-archetypes/python-blank.archetype) with the **REST API** profile — a FastAPI/uvicorn HTTP service. It ships with CI/CD workflows, Kubernetes manifests, and a placeholder Dockerfile — but **no Python application code**. This file tells you (and Claude Code) exactly what to build.
 
 ## Platform constraints
 
@@ -143,6 +143,63 @@ def test_health_ready():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 ```
+
+## Adding business logic
+
+The scaffold gives you a running app with health checks and nothing else. When you (or Claude Code) add features, follow these conventions so the code stays testable and keeps the platform contract intact.
+
+### Where code goes
+
+Keep `main.py` thin — it just wires the app together. Put features in their own modules:
+
+```
+src/{{ prefix_name }}_{{ suffix_name }}/
+  main.py          # FastAPI app, router registration, health endpoints (keep thin)
+  routers/         # one APIRouter module per resource
+  schemas/         # Pydantic request/response models (your validation layer)
+  services/        # business logic — no FastAPI imports, so it unit-tests cleanly
+```
+
+### Adding an endpoint
+
+1. Define request/response models in `schemas/` (Pydantic validates the input for you).
+2. Put the actual logic in a `services/` function that takes and returns plain data (no `Request`/`Response`), so you can unit-test it without HTTP.
+3. Add an `APIRouter` in `routers/`, call the service, return the response model.
+4. Register it in `main.py`: `app.include_router(widgets.router)`.
+5. Add a test with `TestClient` (same pattern as `tests/test_main.py`).
+
+Use `async def` for routes and I/O. **Never remove or break `/health`, `/health/live`, or `/health/ready`** — the readiness probe hits `/health` and the pod will never go Ready without it.
+{%- if database == "CockroachDB (platform-managed)" or database == "External (bring your own URL)" %}
+
+### Database (wired in)
+
+The manifest injects `DATABASE_URL` into the environment — read it with `os.environ["DATABASE_URL"]`, never hardcode it. Use async SQLAlchemy:
+
+- Add `sqlalchemy[asyncio]>=2.0` and `asyncpg>=0.29` to `dependencies` in `pyproject.toml`.
+- Create one `create_async_engine(...)` at startup; hand out an `AsyncSession` per request via a FastAPI dependency.
+- Keep SQL/data access in a `repositories/` module; services call repositories, routers call services.
+{%- endif %}
+{%- if object_storage == "Yes" %}
+
+### Object storage (wired in)
+
+`AZURE_STORAGE_CONTAINER_NAME` is in the environment and the app's identity already has read/write. Use `azure-storage-blob` + `azure-identity` with `DefaultAzureCredential()` (workload identity) — **do not** put account keys or connection strings in code or config.
+{%- endif %}
+{%- if egress == "Restricted (allow-list)" %}
+
+### Outbound calls are restricted
+
+Egress is allow-listed: the app can only reach the hosts in `networking.outbound.external` in `.platform/kubernetes/base/application.yaml`. Calling any other host fails — add the host there before depending on it.
+{%- endif %}
+
+### Example prompts
+
+With the conventions above in this file, you can ask Claude Code to:
+
+- "Add a `POST /widgets` endpoint that validates a `WidgetCreate` body and returns the created widget." → it adds the schema, service, and router, registers the router, and writes a `TestClient` test — without touching the health endpoints.
+{%- if database == "CockroachDB (platform-managed)" or database == "External (bring your own URL)" %}
+- "Persist widgets in the database and add `GET /widgets/{id}`." → it adds a repository backed by an async session dependency and reads `DATABASE_URL` from the environment.
+{%- endif %}
 
 ## CI pipeline
 
