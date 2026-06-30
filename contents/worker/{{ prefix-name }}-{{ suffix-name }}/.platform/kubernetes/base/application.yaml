@@ -1,0 +1,53 @@
+apiVersion: meta.p6m.dev/v1alpha1
+kind: PlatformApplication
+metadata:
+  name: {{ prefix-name }}-{{ suffix-name }}
+  labels:
+    p6m.dev/app: {{ prefix-name }}-{{ suffix-name }}
+spec:
+  config:
+    LOGGING_STRUCTURED: "true"
+{%- if database == "CockroachDB (platform-managed)" %}
+    # CockroachDB — credentials injected by the platform operator from resources.crdb
+    DATABASE_URL: "postgresql+asyncpg://$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_username):$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_password)@$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_endpoint):$(crdb_{{ prefix_name }}_{{ suffix_name }}_db_port)/{{ prefix_name }}_{{ suffix_name }}_db?ssl=require"
+{%- elif database == "External (bring your own URL)" %}
+    # External database — move this to a secret before production.
+    DATABASE_URL: "{{ database_url }}"
+{%- endif %}
+{%- if object_storage == "Yes" %}
+    AZURE_STORAGE_CONTAINER_NAME: "{{ prefix-name }}-{{ suffix-name }}-data"
+{%- endif %}
+{%- if database == "CockroachDB (platform-managed)" or object_storage == "Yes" %}
+  resources:
+{%- if database == "CockroachDB (platform-managed)" %}
+    crdb:
+      - name: {{ prefix-name }}-{{ suffix-name }}
+{%- endif %}
+{%- if object_storage == "Yes" %}
+    blobstorage:
+      - name: {{ prefix-name }}-{{ suffix-name }}-data
+        accesses: [read, write]
+{%- endif %}
+{%- endif %}
+  # Worker profile: no `ports`, no `readinessProbe`, no `networking.ingress`.
+  # The operator injects no readiness probe when one is omitted, so the pod is
+  # considered Ready immediately — correct for a headless background process
+  # that serves no traffic. Add an HTTP server + probe only if you need one.
+  deployment:
+    image: {{ prefix-name }}-{{ suffix-name }}-server:latest
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+{%- if egress == "Restricted (allow-list)" %}
+  networking:
+    outbound:
+      external:
+{%- for host in egress_hosts %}
+        - host: {{ host }}
+          ports: [443]
+{%- endfor %}
+{%- endif %}
