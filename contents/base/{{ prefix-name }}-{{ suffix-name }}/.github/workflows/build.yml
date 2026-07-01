@@ -34,7 +34,7 @@ jobs:
         uses: p6m-actions/python-uv-repository-login@v1
         with:
           credentials: |
-            artifactory=${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}:${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+            artifactory=${{'{'}}{ secrets.P6M_ARTIFACTORY_USERNAME }}:${{'{'}}{ secrets.P6M_ARTIFACTORY_IDENTITY_TOKEN }}
 
       - name: Cut Patch Version
         if: github.ref_name == 'main'
@@ -49,9 +49,9 @@ jobs:
       - name: Login to Docker Repository
         uses: p6m-actions/docker-repository-login@v1
         with:
-          registry: ${{'{'}}{ vars.ARTIFACTORY_HOSTNAME }}
-          username: ${{'{'}}{ secrets.ARTIFACTORY_USERNAME }}
-          password: ${{'{'}}{ secrets.ARTIFACTORY_IDENTITY_TOKEN }}
+          registry: ${{'{'}}{ vars.P6M_ARTIFACTORY_HOSTNAME }}
+          username: ${{'{'}}{ secrets.P6M_ARTIFACTORY_USERNAME }}
+          password: ${{'{'}}{ secrets.P6M_ARTIFACTORY_IDENTITY_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -60,7 +60,7 @@ jobs:
         id: docker-publish
         uses: docker/build-push-action@v6
         with:
-          tags: ${{'{'}}{ vars.ARTIFACTORY_HOSTNAME }}/${{'{'}}{ vars.ARTIFACTORY_PROJECT }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${{'{'}}{ steps.cut-patch.outputs.version || format('dev-{0}', github.sha) }}
+          tags: ${{'{'}}{ vars.P6M_ARTIFACTORY_HOSTNAME }}/${{'{'}}{ vars.P6M_ARTIFACTORY_PROJECT }}-docker-local/applications/{{ prefix-name }}-{{ suffix-name }}-server:${{'{'}}{ steps.cut-patch.outputs.version || format('dev-{0}', github.sha) }}
           platforms: linux/amd64,linux/arm64
           push: ${{'{'}}{github.ref_name == 'main' }}
 
@@ -77,6 +77,6 @@ jobs:
           image-name: ${{'{'}}{env.IMAGE_NAME }}
           environment: "dev"
           digest: ${{'{'}}{ needs.build_and_deploy.outputs.digest }}
-          update-manifest-token: ${{'{'}}{ secrets.UPDATE_MANIFEST_TOKEN }}
-          platform-dispatch-url: ${{'{'}}{ vars.PLATFORM_DISPATCH_URL }}
+          update-manifest-token: ${{'{'}}{ secrets.P6M_UPDATE_MANIFEST_TOKEN }}
+          platform-dispatch-url: ${{'{'}}{ vars.P6M_PLATFORM_DISPATCH_URL }}
           directory-name: {{ prefix-name }}-{{ suffix-name }}
