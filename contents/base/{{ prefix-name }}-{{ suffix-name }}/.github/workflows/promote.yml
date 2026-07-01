@@ -50,8 +50,8 @@ jobs:
           directory-name: ${{'{'}}{env.GITHUB_REPOSITORY_BASENAME }}
           environment: ${{'{'}}{inputs.environment }}
           digest: ${{'{'}}{env.DIGEST_TO_PROMOTE }}
-          update-manifest-token: ${{'{'}}{secrets.UPDATE_MANIFEST_TOKEN }}
-          platform-dispatch-url: ${{'{'}}{vars.PLATFORM_DISPATCH_URL }}
+          update-manifest-token: ${{'{'}}{secrets.P6M_UPDATE_MANIFEST_TOKEN }}
+          platform-dispatch-url: ${{'{'}}{vars.P6M_PLATFORM_DISPATCH_URL }}
 
       - uses: ncipollo/release-action@v1
         with:
